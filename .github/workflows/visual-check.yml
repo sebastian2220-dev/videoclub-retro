@@ -49,7 +49,7 @@ jobs:
               const resources = performance.getEntriesByType('resource')
                 .map(r => r.name)
                 .filter(name => name.includes('woman-idle') || name.includes('game.js'));
-              const game = Phaser.GAMES && Phaser.GAMES[0];
+              const game = window.videoclubGame;
               let scene = null;
               let sceneInfo = null;
               if (game) {
@@ -70,7 +70,7 @@ jobs:
               return {
                 scripts,
                 resources,
-                games: Phaser.GAMES ? Phaser.GAMES.length : 0,
+                gameAvailable: !!game,
                 sceneInfo
               };
             });
@@ -79,7 +79,7 @@ jobs:
             const womanStates = [];
             for (let i = 0; i < 5; i++) {
               const state = await page.evaluate(() => {
-                const game = Phaser.GAMES && Phaser.GAMES[0];
+                const game = window.videoclubGame;
                 if (!game) return null;
                 const scene = game.scene.getScene('Entrada');
                 const head = scene && scene.__womanIdleObjects && scene.__womanIdleObjects.headContainer;
