@@ -78,7 +78,10 @@
     eyelid.lineStyle(6, 0x32100c, 1);
     eyelid.beginPath();
     eyelid.moveTo(78, -162);
-    eyelid.quadraticBezierTo(98, -148, 118, -161);
+    eyelid.lineTo(87, -156);
+    eyelid.lineTo(98, -151);
+    eyelid.lineTo(108, -154);
+    eyelid.lineTo(118, -161);
     eyelid.strokePath();
     eyelid.lineStyle(3, 0x32100c, 1);
     eyelid.beginPath();
