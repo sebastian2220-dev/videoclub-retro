@@ -30,27 +30,38 @@
     const sourceScaleX = source.width / GAME_WIDTH;
     const sourceScaleY = source.height / GAME_HEIGHT;
 
-    // Duplica una zona exacta del fondo y la mueve apenas. Como la copia sale
-    // de la misma ilustración, la mujer conserva exactamente el mismo estilo.
-    const makeAnimatedPiece = ({
-      rect,
-      pivot,
-      mask,
-      depth = 14
-    }) => {
-      const piece = scene.add.image(pivot.x, pivot.y, 'entrada')
-        .setDisplaySize(GAME_WIDTH, GAME_HEIGHT)
-        .setOrigin(pivot.x / GAME_WIDTH, pivot.y / GAME_HEIGHT)
-        .setCrop(
-          rect.x * sourceScaleX,
-          rect.y * sourceScaleY,
-          rect.width * sourceScaleX,
-          rect.height * sourceScaleY
-        )
+    // Crea una copia exacta de una zona del dibujo original. De esta forma
+    // animamos a LA MISMA mujer sin generar otro personaje ni cambiar estilo.
+    const makePieceTexture = (key, rect) => {
+      if (scene.textures.exists(key)) return;
+
+      const sw = Math.max(1, Math.round(rect.width * sourceScaleX));
+      const sh = Math.max(1, Math.round(rect.height * sourceScaleY));
+      const sx = Math.round(rect.x * sourceScaleX);
+      const sy = Math.round(rect.y * sourceScaleY);
+
+      const texture = scene.textures.createCanvas(key, sw, sh);
+      const ctx = texture.getContext();
+      ctx.clearRect(0, 0, sw, sh);
+      ctx.drawImage(source, sx, sy, sw, sh, 0, 0, sw, sh);
+      texture.refresh();
+    };
+
+    const makeAnimatedPiece = ({ key, rect, pivot, mask, depth }) => {
+      makePieceTexture(key, rect);
+
+      // El pivote se expresa en coordenadas de la escena y luego se convierte
+      // al origen local del recorte.
+      const localPivotX = (pivot.x - rect.x) / rect.width;
+      const localPivotY = (pivot.y - rect.y) / rect.height;
+
+      const piece = scene.add.image(pivot.x, pivot.y, key)
+        .setDisplaySize(rect.width, rect.height)
+        .setOrigin(localPivotX, localPivotY)
         .setDepth(depth);
 
-      // Una máscara degradada evita que el borde del recorte se vea como un
-      // rectángulo pegado sobre la escena.
+      // Máscara suave para que el recorte se funda con el fondo y no se vea
+      // como un rectángulo cuando se mueve unos pocos píxeles.
       const maskImage = scene.make.image({
         x: mask.x,
         y: mask.y,
@@ -63,6 +74,8 @@
 
       piece.__maskImage = maskImage;
       piece.__bitmapMask = bitmapMask;
+      piece.__baseX = piece.x;
+      piece.__baseY = piece.y;
       piece.__baseScaleX = piece.scaleX;
       piece.__baseScaleY = piece.scaleY;
 
@@ -70,89 +83,126 @@
     };
 
     // -----------------------------------------------------------------------
-    // 1) RESPIRACIÓN
+    // 1) RESPIRACIÓN: ahora sí visible, pero con la cintura como ancla.
     // -----------------------------------------------------------------------
-    // Solo movemos mínimamente torso/cintura. El punto de giro está cerca de
-    // la cintura, así la parte superior "respira" sin hacer flotar al personaje.
     const torso = makeAnimatedPiece({
-      rect: { x: 55, y: 535, width: 430, height: 330 },
-      pivot: { x: 248, y: 805 },
-      mask: { x: 250, y: 690, width: 430, height: 360 },
+      key: 'woman-torso-idle',
+      rect: { x: 70, y: 520, width: 390, height: 390 },
+      pivot: { x: 250, y: 865 },
+      mask: { x: 255, y: 705, width: 440, height: 455 },
       depth: 14
     });
 
     scene.tweens.add({
       targets: torso,
       scaleY: {
-        from: torso.__baseScaleY * 0.998,
-        to: torso.__baseScaleY * 1.006
+        from: torso.__baseScaleY * 0.990,
+        to: torso.__baseScaleY * 1.016
       },
       scaleX: {
-        from: torso.__baseScaleX * 1.001,
-        to: torso.__baseScaleX * 0.999
+        from: torso.__baseScaleX * 1.004,
+        to: torso.__baseScaleX * 0.997
       },
-      duration: 1850,
+      y: {
+        from: torso.__baseY + 2,
+        to: torso.__baseY - 3
+      },
+      duration: 1450,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.InOut'
     });
 
     // -----------------------------------------------------------------------
-    // 2) PELO / COLA
+    // 2) CABEZA: un micro balanceo hace que el personaje deje de estar tieso.
     // -----------------------------------------------------------------------
-    // Movimiento muy corto alrededor del punto donde está recogido el pelo.
-    const ponytail = makeAnimatedPiece({
-      rect: { x: 0, y: 275, width: 245, height: 390 },
-      pivot: { x: 173, y: 372 },
-      mask: { x: 112, y: 465, width: 285, height: 430 },
+    const head = makeAnimatedPiece({
+      key: 'woman-head-idle',
+      rect: { x: 70, y: 330, width: 320, height: 300 },
+      pivot: { x: 220, y: 590 },
+      mask: { x: 225, y: 455, width: 355, height: 345 },
       depth: 15
     });
 
     scene.tweens.add({
-      targets: ponytail,
-      angle: { from: -0.28, to: 0.34 },
-      scaleX: {
-        from: ponytail.__baseScaleX * 0.999,
-        to: ponytail.__baseScaleX * 1.002
-      },
-      duration: 2350,
+      targets: head,
+      angle: { from: -0.45, to: 0.55 },
+      y: { from: head.__baseY + 1, to: head.__baseY - 3 },
+      duration: 2050,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.InOut'
     });
 
     // -----------------------------------------------------------------------
-    // 3) PESTAÑEO
+    // 3) PELO: la cola se mueve un poco más que la cabeza.
     // -----------------------------------------------------------------------
-    // La ilustración ya tiene un ojo guiñado. Para el blink cubrimos durante
-    // unas décimas el ojo abierto y dibujamos encima una línea de pestañas.
+    const ponytail = makeAnimatedPiece({
+      key: 'woman-hair-idle',
+      rect: { x: 0, y: 275, width: 230, height: 430 },
+      pivot: { x: 165, y: 390 },
+      mask: { x: 105, y: 480, width: 270, height: 455 },
+      depth: 16
+    });
+
+    scene.tweens.add({
+      targets: ponytail,
+      angle: { from: -1.15, to: 1.30 },
+      x: { from: ponytail.__baseX - 2, to: ponytail.__baseX + 3 },
+      duration: 1750,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.InOut'
+    });
+
+    // -----------------------------------------------------------------------
+    // 4) BRAZO QUE PRESENTA LA ENTRADA: gesto mínimo y periódico.
+    // -----------------------------------------------------------------------
+    const arm = makeAnimatedPiece({
+      key: 'woman-arm-idle',
+      rect: { x: 300, y: 570, width: 330, height: 210 },
+      pivot: { x: 325, y: 620 },
+      mask: { x: 455, y: 670, width: 385, height: 235 },
+      depth: 15
+    });
+
+    scene.tweens.add({
+      targets: arm,
+      angle: { from: -0.55, to: 0.75 },
+      y: { from: arm.__baseY + 2, to: arm.__baseY - 2 },
+      duration: 1800,
+      delay: 350,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.InOut'
+    });
+
+    // -----------------------------------------------------------------------
+    // 5) PESTAÑEO: más frecuente y un poco más largo para que se vea.
+    // -----------------------------------------------------------------------
     const eyelid = scene.add.graphics()
-      .setDepth(18)
+      .setDepth(19)
       .setVisible(false);
 
     const drawClosedEye = () => {
       eyelid.clear();
 
-      // Tono tomado de la piel de la ilustración alrededor del ojo.
-      eyelid.fillStyle(0xffae70, 1);
-      eyelid.fillEllipse(281, 458, 36, 38);
+      // Cubre el ojo abierto con tono de piel antes de dibujar el párpado.
+      eyelid.fillStyle(0xffad73, 1);
+      eyelid.fillEllipse(282, 440, 40, 42);
 
-      // Párpado cerrado.
-      eyelid.lineStyle(6, 0x2f0b08, 1);
+      eyelid.lineStyle(6, 0x32100c, 1);
       eyelid.beginPath();
-      eyelid.moveTo(265, 456);
-      eyelid.lineTo(273, 461);
-      eyelid.lineTo(282, 463);
-      eyelid.lineTo(291, 458);
+      eyelid.moveTo(264, 438);
+      eyelid.quadraticBezierTo(282, 451, 299, 439);
       eyelid.strokePath();
 
-      // Dos pestañitas pequeñas para mantener el lenguaje cartoon.
-      eyelid.lineStyle(3, 0x2f0b08, 1);
+      eyelid.lineStyle(3, 0x32100c, 1);
       eyelid.beginPath();
-      eyelid.moveTo(289, 458);
-      eyelid.lineTo(296, 455);
-      eyelid.moveTo(289, 460);
-      eyelid.lineTo(296, 461);
+      eyelid.moveTo(296, 440);
+      eyelid.lineTo(304, 436);
+      eyelid.moveTo(296, 442);
+      eyelid.lineTo(304, 443);
       eyelid.strokePath();
     };
 
@@ -161,42 +211,24 @@
     const blinkOnce = () => {
       eyelid.setVisible(true);
 
-      scene.time.delayedCall(105, () => {
+      scene.time.delayedCall(145, () => {
         eyelid.setVisible(false);
         scene.time.delayedCall(
-          Phaser.Math.Between(2100, 4200),
+          Phaser.Math.Between(1500, 3000),
           blinkOnce
         );
       });
     };
 
-    // Este primer pestañeo también permite que la revisión automática lo
-    // capture de forma reproducible.
-    scene.time.delayedCall(1625, blinkOnce);
-
-    // Un micro balanceo del conjunto de luces sobre la cara evita que el
-    // personaje quede visualmente desconectado de los neones que ya animamos.
-    const faceWarmth = scene.add.image(250, 505, 'soft-light')
-      .setDisplaySize(250, 290)
-      .setTint(0xff9a58)
-      .setAlpha(0.018)
-      .setDepth(13)
-      .setBlendMode(Phaser.BlendModes.ADD);
-
-    scene.tweens.add({
-      targets: faceWarmth,
-      alpha: { from: 0.010, to: 0.026 },
-      duration: 1700,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.InOut'
-    });
+    // Primer blink rápido para que sea fácil comprobarlo al abrir la página.
+    scene.time.delayedCall(1050, blinkOnce);
 
     scene.__womanIdleObjects = {
       torso,
+      head,
       ponytail,
-      eyelid,
-      faceWarmth
+      arm,
+      eyelid
     };
 
     return true;
