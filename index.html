@@ -13,6 +13,19 @@
 </head>
 <body>
   <div id="game"></div>
+
+  <script>
+    // Phaser 3.90 ya no nos entrega una instancia útil mediante Phaser.GAMES
+    // en este proyecto. Guardamos la instancia real cuando game.js la crea.
+    const VideoclubOriginalGame = Phaser.Game;
+    Phaser.Game = class VideoclubGame extends VideoclubOriginalGame {
+      constructor(...args) {
+        super(...args);
+        window.videoclubGame = this;
+      }
+    };
+  </script>
+
   <script src="game.js"></script>
   <script src="neon-extra.js"></script>
   <script src="woman-idle.js"></script>
