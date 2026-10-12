@@ -12,15 +12,19 @@ class EntradaScene extends Phaser.Scene {
   }
 
   create() {
-    // 1) FONDO: seguimos usando la entrada cartoon original.
+    // 1) FONDO: mantenemos la entrada cartoon original.
     this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'entrada')
       .setDisplaySize(GAME_WIDTH, GAME_HEIGHT)
       .setDepth(0);
 
-    // 2) ILUMINACIÓN: cada luz importante tiene halo + luz proyectada + reflejo.
+    // 2) Creamos una textura de luz con degradado suave.
+    // La generamos con código, así no necesitamos otra imagen externa.
+    this.createLightingTextures();
+
+    // 3) Añadimos halo + luz proyectada + reflejos.
     this.createNeonAtmosphere();
 
-    // 3) BOTÓN ENTRAR independiente.
+    // 4) BOTÓN ENTRAR independiente.
     const entrar = this.add.image(960, 890, 'botonEntrar')
       .setDisplaySize(620, 207)
       .setDepth(20)
@@ -69,301 +73,312 @@ class EntradaScene extends Phaser.Scene {
     });
   }
 
-  // Crea un halo suave usando varias elipses superpuestas.
-  // Esto evita que la luz parezca un círculo duro pegado sobre el dibujo.
-  addSoftGlow(x, y, width, height, color, strength = 0.10, depth = 5) {
-    const container = this.add.container(x, y).setDepth(depth);
-    const ADD = Phaser.BlendModes.ADD;
+  // ---------------------------------------------------------------------------
+  // TEXTURA DE LUZ
+  // ---------------------------------------------------------------------------
+  // En la versión anterior la luz se construía con elipses superpuestas.
+  // Funcionaba, pero podían distinguirse círculos. Ahora usamos un degradado
+  // radial real: centro brillante y borde completamente transparente.
+  createLightingTextures() {
+    if (this.textures.exists('soft-light')) return;
 
-    const layers = [
-      { scale: 1.00, alpha: strength * 0.24 },
-      { scale: 0.78, alpha: strength * 0.34 },
-      { scale: 0.56, alpha: strength * 0.48 },
-      { scale: 0.34, alpha: strength * 0.68 }
-    ];
+    const size = 256;
+    const texture = this.textures.createCanvas('soft-light', size, size);
+    const ctx = texture.getContext();
 
-    layers.forEach(layer => {
-      const ellipse = this.add.ellipse(
-        0,
-        0,
-        width * layer.scale,
-        height * layer.scale,
-        color,
-        layer.alpha
-      ).setBlendMode(ADD);
+    const gradient = ctx.createRadialGradient(
+      size / 2,
+      size / 2,
+      0,
+      size / 2,
+      size / 2,
+      size / 2
+    );
 
-      container.add(ellipse);
-    });
+    gradient.addColorStop(0.00, 'rgba(255,255,255,1.00)');
+    gradient.addColorStop(0.18, 'rgba(255,255,255,0.82)');
+    gradient.addColorStop(0.42, 'rgba(255,255,255,0.42)');
+    gradient.addColorStop(0.70, 'rgba(255,255,255,0.13)');
+    gradient.addColorStop(1.00, 'rgba(255,255,255,0.00)');
 
-    return container;
+    ctx.clearRect(0, 0, size, size);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, size, size);
+    texture.refresh();
   }
 
-  // Simula un haz que baja desde una lámpara superior.
-  addLightCone(x, y, width, height, color, strength = 0.05, depth = 4) {
-    const container = this.add.container(x, y).setDepth(depth);
-    const ADD = Phaser.BlendModes.ADD;
+  // Crea una mancha de luz suave. Al estirar la textura podemos simular
+  // halos, luz que cae por una pared o reflejos sobre vidrio/piso.
+  addGradientLight(x, y, width, height, color, alpha, depth = 5, angle = 0) {
+    const light = this.add.image(x, y, 'soft-light')
+      .setDisplaySize(width, height)
+      .setTint(color)
+      .setAlpha(alpha)
+      .setDepth(depth)
+      .setAngle(angle)
+      .setBlendMode(Phaser.BlendModes.ADD);
 
-    const coneLayers = [
-      { width: width, alpha: strength * 0.35 },
-      { width: width * 0.72, alpha: strength * 0.48 },
-      { width: width * 0.46, alpha: strength * 0.65 }
-    ];
-
-    coneLayers.forEach(layer => {
-      const points = [
-        0, 0,
-        -layer.width / 2, height,
-        layer.width / 2, height
-      ];
-
-      const cone = this.add.polygon(0, 0, points, color, layer.alpha)
-        .setOrigin(0.5, 0)
-        .setBlendMode(ADD);
-
-      container.add(cone);
-    });
-
-    return container;
+    // Guardamos la intensidad original para que el pulso y el flicker
+    // siempre vuelvan exactamente al brillo correcto.
+    light.baseLightAlpha = alpha;
+    return light;
   }
 
-  createNeonAtmosphere() {
-    const ADD = Phaser.BlendModes.ADD;
+  createLightGroup(items) {
+    const group = {
+      items,
+      pulse: 1,
+      flicker: 1
+    };
 
-    // =========================================================
-    // A) LETRERO PRINCIPAL VIDEOCLUB / RETRO
-    // =========================================================
+    this.refreshLightGroup(group);
+    return group;
+  }
 
-    // Fuente: halo pegado al cartel.
-    const marqueeSource = this.addSoftGlow(
-      960, 215, 1100, 250, 0xffb447, 0.20, 5
-    );
+  refreshLightGroup(group) {
+    group.items.forEach(light => {
+      light.setAlpha(light.baseLightAlpha * group.pulse * group.flicker);
+    });
+  }
 
-    // Luz proyectada: el cartel ilumina la fachada justo debajo.
-    const marqueeSpill = this.addSoftGlow(
-      960, 345, 1280, 300, 0xffc866, 0.11, 4
-    );
+  addLightPulse(group, min, max, duration, delay = 0) {
+    group.pulse = max;
 
-    // Refuerzo azul/rosado de la palabra RETRO.
-    const retroBlue = this.addSoftGlow(
-      960, 300, 610, 120, 0x2fd8ff, 0.14, 6
-    );
+    this.tweens.add({
+      targets: group,
+      pulse: { from: min, to: max },
+      duration,
+      delay,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.InOut',
+      onUpdate: () => this.refreshLightGroup(group)
+    });
+  }
 
-    const retroPink = this.addSoftGlow(
-      960, 300, 520, 95, 0xff44c8, 0.10, 6
-    );
-
-    // Dos barras rosas laterales del letrero.
-    const pinkLeft = this.add.rectangle(652, 304, 185, 16, 0xff45d5, 0.18)
-      .setDepth(7)
-      .setBlendMode(ADD);
-
-    const pinkRight = this.add.rectangle(1268, 304, 185, 16, 0xff45d5, 0.18)
-      .setDepth(7)
-      .setBlendMode(ADD);
-
-    // =========================================================
-    // B) CARTEL ABIERTO
-    // =========================================================
-
-    // Fuente del cartel.
-    const openSource = this.addSoftGlow(
-      1085, 540, 250, 120, 0xff42aa, 0.18, 7
-    );
-
-    // Halo azulado exterior.
-    const openBlue = this.addSoftGlow(
-      1085, 540, 315, 155, 0x2fcfff, 0.10, 6
-    );
-
-    // La luz del cartel se refleja en el vidrio de abajo.
-    const openGlassSpill = this.addSoftGlow(
-      1088, 655, 250, 300, 0x5bd8ff, 0.075, 4
-    );
-
-    // Una pequeña mancha rosa mezclada en el vidrio para que no sea plano.
-    const openGlassPink = this.addSoftGlow(
-      1088, 650, 180, 225, 0xff4db2, 0.045, 5
-    );
-
-    // =========================================================
-    // C) LÁMPARAS SUPERIORES DE LA FACHADA
-    // =========================================================
-
-    // Tomamos focos grandes visibles en la ilustración.
-    const lampPositions = [
-      [288, 104],
-      [594, 78],
-      [967, 74],
-      [1245, 76],
-      [1590, 118]
-    ];
-
-    const lampGroups = lampPositions.map(([x, y], index) => {
-      // Halo justo alrededor de la ampolleta.
-      const source = this.addSoftGlow(
-        x, y, 130, 95, 0xffd67a, 0.18, 8
-      );
-
-      // Haz que baja por la pared.
-      const cone = this.addLightCone(
-        x, y + 14, 230, 360, 0xffcf72, 0.055, 3
-      );
-
-      // Mancha de luz donde el haz termina, cerca de la zona inferior.
-      const pool = this.addSoftGlow(
-        x, 720, 300, 180, 0xffc76d, 0.055, 3
-      );
-
-      // Cada lámpara respira con un tiempo diferente.
+  scheduleIrregularFlicker(group, minDelay, maxDelay) {
+    const runFlicker = () => {
       this.tweens.add({
-        targets: [source, cone, pool],
-        alpha: { from: 0.78, to: 1 },
-        duration: 1350 + index * 130,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.InOut'
-      });
-
-      return { source, cone, pool };
-    });
-
-    // =========================================================
-    // D) LUZ INTERIOR DEL LOCAL
-    // =========================================================
-
-    // El interior cálido también debe iluminar el marco de las puertas.
-    const doorWarmGlow = this.addSoftGlow(
-      960, 665, 520, 420, 0xffc36a, 0.075, 3
-    );
-
-    // Un segundo halo más pequeño da sensación de profundidad interior.
-    const doorInnerGlow = this.addSoftGlow(
-      960, 620, 330, 320, 0xffe19a, 0.065, 4
-    );
-
-    // =========================================================
-    // E) REFLEJOS EN PISO / VEREDA
-    // =========================================================
-
-    // Reflejo cálido general que llega desde la entrada.
-    const floorWarm = this.addSoftGlow(
-      960, 910, 880, 160, 0xffbd62, 0.075, 3
-    );
-
-    // Reflejo azul y rosado del neón principal.
-    const floorBlue = this.addSoftGlow(
-      850, 935, 620, 95, 0x38ccff, 0.050, 3
-    );
-
-    const floorPink = this.addSoftGlow(
-      1080, 940, 560, 90, 0xff43c0, 0.042, 3
-    );
-
-    // Líneas finas de reflexión: imitan una superficie algo brillante.
-    const reflectionBlue = this.add.rectangle(850, 905, 430, 7, 0x55d7ff, 0.075)
-      .setDepth(4)
-      .setBlendMode(ADD)
-      .setAngle(-1.2);
-
-    const reflectionPink = this.add.rectangle(1085, 930, 350, 6, 0xff58c9, 0.070)
-      .setDepth(4)
-      .setBlendMode(ADD)
-      .setAngle(1.4);
-
-    // =========================================================
-    // F) ANIMACIÓN DE LA ILUMINACIÓN
-    // =========================================================
-
-    // El gran letrero respira lentamente.
-    this.tweens.add({
-      targets: [marqueeSource, marqueeSpill, retroBlue, retroPink],
-      alpha: { from: 0.82, to: 1 },
-      duration: 1550,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.InOut'
-    });
-
-    // ABIERTO tiene su propio ritmo.
-    this.tweens.add({
-      targets: [openSource, openBlue, openGlassSpill, openGlassPink],
-      alpha: { from: 0.72, to: 1 },
-      duration: 980,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.InOut'
-    });
-
-    // El interior del local cambia muy poco, como iluminación eléctrica real.
-    this.tweens.add({
-      targets: [doorWarmGlow, doorInnerGlow],
-      alpha: { from: 0.88, to: 1 },
-      duration: 2200,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.InOut'
-    });
-
-    // Los reflejos del piso "respiran" con el neón.
-    this.tweens.add({
-      targets: [floorWarm, floorBlue, floorPink],
-      alpha: { from: 0.76, to: 1 },
-      scaleX: { from: 0.985, to: 1.015 },
-      duration: 1750,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.InOut'
-    });
-
-    this.tweens.add({
-      targets: [reflectionBlue, reflectionPink],
-      alpha: { from: 0.45, to: 1 },
-      scaleX: { from: 0.92, to: 1.08 },
-      duration: 1350,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.InOut'
-    });
-
-    // =========================================================
-    // G) FLICKER IRREGULAR: fuente Y entorno reaccionan juntos.
-    // =========================================================
-
-    const flickerSets = [
-      [retroPink, marqueeSpill],
-      [pinkLeft, retroPink],
-      [pinkRight, retroPink],
-      [openSource, openGlassSpill]
-    ];
-
-    const scheduleFlicker = () => {
-      const targets = Phaser.Utils.Array.GetRandom(flickerSets);
-
-      this.tweens.add({
-        targets,
-        alpha: 0.28,
-        duration: 45,
+        targets: group,
+        flicker: 0.28,
+        duration: Phaser.Math.Between(35, 65),
         yoyo: true,
         repeat: Phaser.Math.Between(1, 2),
         ease: 'Linear',
+        onUpdate: () => this.refreshLightGroup(group),
         onComplete: () => {
-          targets.forEach(target => target.setAlpha(1));
+          group.flicker = 1;
+          this.refreshLightGroup(group);
           this.time.delayedCall(
-            Phaser.Math.Between(2800, 7600),
-            scheduleFlicker
+            Phaser.Math.Between(minDelay, maxDelay),
+            runFlicker
           );
         }
       });
     };
 
     this.time.delayedCall(
-      Phaser.Math.Between(1600, 3400),
-      scheduleFlicker
+      Phaser.Math.Between(minDelay, maxDelay),
+      runFlicker
+    );
+  }
+
+  createNeonAtmosphere() {
+    // -------------------------------------------------------------------------
+    // A) LETRERO PRINCIPAL: fuente + halo + luz que cae en la fachada.
+    // -------------------------------------------------------------------------
+    const marqueeHalo = this.addGradientLight(
+      960, 205, 1290, 330, 0xffb447, 0.105, 4
     );
 
-    // Evitamos que la variable quede sin uso y documentamos que
-    // las lámparas ya tienen animación individual arriba.
-    this.lampGroups = lampGroups;
+    const marqueeDownSpill = this.addGradientLight(
+      960, 365, 1220, 330, 0xffc866, 0.060, 3
+    );
+
+    const retroBlue = this.addGradientLight(
+      960, 292, 650, 145, 0x39d8ff, 0.120, 6
+    );
+
+    const retroPink = this.addGradientLight(
+      960, 300, 560, 115, 0xff45c7, 0.070, 6
+    );
+
+    // Las barras rosas tienen halos propios, pero suaves.
+    const pinkLeft = this.addGradientLight(
+      650, 304, 270, 70, 0xff3fcf, 0.105, 7
+    );
+
+    const pinkRight = this.addGradientLight(
+      1270, 304, 270, 70, 0xff3fcf, 0.105, 7
+    );
+
+    // Un pequeño rebote de color sobre la zona alta de los vidrios.
+    const marqueeGlassBlue = this.addGradientLight(
+      835, 415, 430, 180, 0x43cfff, 0.032, 3, -3
+    );
+
+    const marqueeGlassPink = this.addGradientLight(
+      1110, 415, 410, 180, 0xff45c7, 0.028, 3, 3
+    );
+
+    const marqueeGroup = this.createLightGroup([
+      marqueeHalo,
+      marqueeDownSpill,
+      retroBlue,
+      retroPink,
+      pinkLeft,
+      pinkRight,
+      marqueeGlassBlue,
+      marqueeGlassPink
+    ]);
+
+    this.addLightPulse(marqueeGroup, 0.88, 1.00, 1650);
+
+    // -------------------------------------------------------------------------
+    // B) CARTEL ABIERTO: fuente + vidrio inmediatamente alrededor.
+    // -------------------------------------------------------------------------
+    const openPink = this.addGradientLight(
+      1085, 540, 270, 125, 0xff45aa, 0.145, 8, -2.5
+    );
+
+    const openBlue = this.addGradientLight(
+      1085, 540, 325, 165, 0x32cbff, 0.085, 7, -2.5
+    );
+
+    // Esta luz es más vertical: simula el color reflejado sobre el vidrio.
+    const openGlassBlue = this.addGradientLight(
+      1088, 650, 260, 310, 0x46d3ff, 0.045, 4, -1
+    );
+
+    const openGlassPink = this.addGradientLight(
+      1065, 635, 185, 250, 0xff4eb4, 0.030, 5, 1
+    );
+
+    const openGroup = this.createLightGroup([
+      openPink,
+      openBlue,
+      openGlassBlue,
+      openGlassPink
+    ]);
+
+    this.addLightPulse(openGroup, 0.80, 1.00, 1050, 160);
+
+    // -------------------------------------------------------------------------
+    // C) LÁMPARAS: cada una ilumina su pared cercana, no solo la ampolleta.
+    // -------------------------------------------------------------------------
+    const lamps = [
+      // x, y, ancho de derrame, alto de derrame
+      [288, 104, 240, 300],
+      [594, 78, 250, 260],
+      [967, 74, 260, 270],
+      [1245, 76, 250, 260],
+      [1590, 118, 250, 330]
+    ];
+
+    this.lampGroups = lamps.map(([x, y, spillWidth, spillHeight], index) => {
+      const source = this.addGradientLight(
+        x, y + 5, 150, 120, 0xffd77b, 0.115, 8
+      );
+
+      // Mancha estirada hacia abajo. Al ser un degradado no tiene borde de cono.
+      const wallSpill = this.addGradientLight(
+        x, y + spillHeight * 0.48,
+        spillWidth,
+        spillHeight,
+        0xffcb73,
+        0.043,
+        3
+      );
+
+      // Rebote más pequeño y cálido cerca del punto donde la luz toca la fachada.
+      const wallBounce = this.addGradientLight(
+        x,
+        y + spillHeight * 0.78,
+        spillWidth * 0.72,
+        spillHeight * 0.38,
+        0xffe0a0,
+        0.026,
+        4
+      );
+
+      const group = this.createLightGroup([source, wallSpill, wallBounce]);
+      this.addLightPulse(
+        group,
+        0.91,
+        1.00,
+        1700 + index * 145,
+        index * 85
+      );
+      return group;
+    });
+
+    // -------------------------------------------------------------------------
+    // D) INTERIOR DEL LOCAL: calor saliendo por las puertas y ventanas.
+    // -------------------------------------------------------------------------
+    const doorWarm = this.addGradientLight(
+      960, 635, 520, 450, 0xffbd62, 0.050, 2
+    );
+
+    const doorCore = this.addGradientLight(
+      960, 610, 340, 320, 0xffe2a0, 0.038, 3
+    );
+
+    const leftWindowWarm = this.addGradientLight(
+      460, 520, 420, 520, 0xffba64, 0.026, 2
+    );
+
+    const rightWindowWarm = this.addGradientLight(
+      1390, 520, 430, 520, 0xffba64, 0.026, 2
+    );
+
+    const interiorGroup = this.createLightGroup([
+      doorWarm,
+      doorCore,
+      leftWindowWarm,
+      rightWindowWarm
+    ]);
+
+    this.addLightPulse(interiorGroup, 0.95, 1.00, 2500, 300);
+
+    // -------------------------------------------------------------------------
+    // E) REFLEJOS: colores que llegan a la zona baja de la entrada.
+    // -------------------------------------------------------------------------
+    const floorWarm = this.addGradientLight(
+      960, 835, 900, 170, 0xffb85d, 0.045, 3
+    );
+
+    const floorBlue = this.addGradientLight(
+      820, 858, 560, 95, 0x3ac9ff, 0.026, 4, -2
+    );
+
+    const floorPink = this.addGradientLight(
+      1110, 858, 520, 90, 0xff42bc, 0.024, 4, 2
+    );
+
+    const floorGroup = this.createLightGroup([
+      floorWarm,
+      floorBlue,
+      floorPink
+    ]);
+
+    this.addLightPulse(floorGroup, 0.82, 1.00, 1850, 250);
+
+    // Movimiento casi imperceptible: el reflejo cambia de ancho, no de posición.
+    this.tweens.add({
+      targets: [floorBlue, floorPink],
+      scaleX: { from: 0.97, to: 1.035 },
+      duration: 2100,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.InOut'
+    });
+
+    // -------------------------------------------------------------------------
+    // F) FLICKER OCASIONAL.
+    // Cuando la fuente falla, también cae la luz que proyecta alrededor.
+    // -------------------------------------------------------------------------
+    this.scheduleIrregularFlicker(openGroup, 3200, 7800);
+    this.scheduleIrregularFlicker(marqueeGroup, 6200, 12500);
   }
 }
 
