@@ -3,7 +3,7 @@
   const GAME_HEIGHT = 1080;
 
   const waitForEntrada = () => {
-    const game = Phaser.GAMES && Phaser.GAMES[0];
+    const game = window.videoclubGame;
     if (!game) return false;
 
     let scene;
@@ -13,8 +13,6 @@
       return false;
     }
 
-    // Importante: no usamos scene.sys.isActive() aquí. En esta escena ese
-    // chequeo impedía que el bloque de animación llegara a inicializarse.
     if (!scene || !scene.textures || !scene.textures.exists('entrada')) return false;
     if (scene.__womanIdleReady) return true;
     scene.__womanIdleReady = true;
