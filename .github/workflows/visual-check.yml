@@ -43,15 +43,25 @@ jobs:
 
             await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
 
-            await page.waitForTimeout(500);
-            await page.screenshot({ path: 'visual-idle-1.png', fullPage: true });
+            // Capturas rápidas para revisar cómo "agarra corriente" cada neón.
+            await page.waitForTimeout(150);
+            await page.screenshot({ path: 'neon-01-inicio.png', fullPage: true });
 
-            await page.waitForTimeout(1700);
-            await page.screenshot({ path: 'visual-idle-2.png', fullPage: true });
+            await page.waitForTimeout(500);
+            await page.screenshot({ path: 'neon-02-video.png', fullPage: true });
+
+            await page.waitForTimeout(500);
+            await page.screenshot({ path: 'neon-03-retro.png', fullPage: true });
+
+            await page.waitForTimeout(550);
+            await page.screenshot({ path: 'neon-04-abierto.png', fullPage: true });
+
+            await page.waitForTimeout(2200);
+            await page.screenshot({ path: 'neon-05-estable.png', fullPage: true });
 
             await page.mouse.move(960, 890);
             await page.waitForTimeout(400);
-            await page.screenshot({ path: 'visual-hover.png', fullPage: true });
+            await page.screenshot({ path: 'neon-06-hover.png', fullPage: true });
 
             if (errors.length) {
               console.error(errors.join('\n'));
@@ -67,8 +77,11 @@ jobs:
         with:
           name: visual-check
           path: |
-            visual-idle-1.png
-            visual-idle-2.png
-            visual-hover.png
+            neon-01-inicio.png
+            neon-02-video.png
+            neon-03-retro.png
+            neon-04-abierto.png
+            neon-05-estable.png
+            neon-06-hover.png
           if-no-files-found: error
           retention-days: 7
