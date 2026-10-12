@@ -13,10 +13,7 @@
       return false;
     }
 
-    if (!scene || !scene.sys || !scene.sys.isActive() || !scene.textures.exists('entrada')) {
-      return false;
-    }
-
+    if (!scene || !scene.sys || !scene.sys.isActive() || !scene.textures.exists('entrada')) return false;
     if (scene.__womanIdleReady) return true;
     scene.__womanIdleReady = true;
 
@@ -24,12 +21,6 @@
     const sx = source.width / GAME_WIDTH;
     const sy = source.height / GAME_HEIGHT;
 
-    // -----------------------------------------------------------------------
-    // CABEZA / PELO REALMENTE SEPARADOS DEL FONDO
-    // -----------------------------------------------------------------------
-    // Este recorte usa exactamente los píxeles de la ilustración original.
-    // La silueta fue trazada alrededor de cabeza y pelo para que no se mueva
-    // un rectángulo de fondo junto con el personaje.
     const headRect = { x: 0, y: 270, width: 360, height: 370 };
     const headPolygon = [
       [46,45],[31,100],[38,133],[15,139],[0,130],[0,301],[93,345],
@@ -40,24 +31,16 @@
     ];
 
     if (!scene.textures.exists('woman-head-live')) {
-      const tex = scene.textures.createCanvas(
-        'woman-head-live',
-        headRect.width,
-        headRect.height
-      );
+      const tex = scene.textures.createCanvas('woman-head-live', headRect.width, headRect.height);
       const ctx = tex.getContext();
       ctx.clearRect(0, 0, headRect.width, headRect.height);
       ctx.imageSmoothingEnabled = true;
-
       ctx.save();
       ctx.beginPath();
       ctx.moveTo(headPolygon[0][0], headPolygon[0][1]);
-      for (let i = 1; i < headPolygon.length; i++) {
-        ctx.lineTo(headPolygon[i][0], headPolygon[i][1]);
-      }
+      for (let i = 1; i < headPolygon.length; i++) ctx.lineTo(headPolygon[i][0], headPolygon[i][1]);
       ctx.closePath();
       ctx.clip();
-
       ctx.drawImage(
         source,
         headRect.x * sx,
@@ -73,81 +56,71 @@
       tex.refresh();
     }
 
-    // El pivote está cerca del cuello: así la cabeza se balancea y no flota.
     const pivot = { x: 180, y: 590 };
+
+    // Oscurece apenas la cabeza original que queda debajo. Esto evita que al
+    // mover la capa superior se vea una segunda cara completa detrás.
+    const shadow = scene.add.graphics().setDepth(17);
+    shadow.fillStyle(0x12070a, 0.16);
+    shadow.beginPath();
+    shadow.moveTo(headRect.x + headPolygon[0][0], headRect.y + headPolygon[0][1]);
+    for (let i = 1; i < headPolygon.length; i++) {
+      shadow.lineTo(headRect.x + headPolygon[i][0], headRect.y + headPolygon[i][1]);
+    }
+    shadow.closePath();
+    shadow.fillPath();
+
     const headImage = scene.add.image(0, 0, 'woman-head-live')
       .setOrigin(0, 0)
       .setPosition(headRect.x - pivot.x, headRect.y - pivot.y);
 
-    // Ojo cerrado. Va dentro del mismo contenedor, por eso acompaña el
-    // movimiento de la cabeza y no queda clavado en la pantalla.
-    const eyelid = scene.add.graphics();
-    eyelid.setVisible(false);
+    const eyelid = scene.add.graphics().setVisible(false);
+
+    // Coordenada corregida: ahora cae sobre el ojo que está abierto.
     eyelid.fillStyle(0xffad73, 1);
-    eyelid.fillEllipse(98, -143, 42, 42);
+    eyelid.fillEllipse(98, -160, 45, 44);
     eyelid.lineStyle(6, 0x32100c, 1);
     eyelid.beginPath();
-    eyelid.moveTo(79, -145);
-    eyelid.quadraticBezierTo(98, -132, 116, -144);
+    eyelid.moveTo(78, -162);
+    eyelid.quadraticBezierTo(98, -148, 118, -161);
     eyelid.strokePath();
     eyelid.lineStyle(3, 0x32100c, 1);
     eyelid.beginPath();
-    eyelid.moveTo(113, -144);
-    eyelid.lineTo(121, -149);
-    eyelid.moveTo(113, -141);
-    eyelid.lineTo(121, -140);
+    eyelid.moveTo(115, -161);
+    eyelid.lineTo(124, -166);
+    eyelid.moveTo(115, -158);
+    eyelid.lineTo(124, -157);
     eyelid.strokePath();
 
-    const headContainer = scene.add.container(pivot.x, pivot.y, [headImage, eyelid])
-      .setDepth(18);
-
+    const headContainer = scene.add.container(pivot.x, pivot.y, [headImage, eyelid]).setDepth(18);
     const baseX = headContainer.x;
     const baseY = headContainer.y;
 
-    // Movimiento claramente visible: pequeño, pero real.
+    // Ahora el movimiento debe verse a simple vista: sigue siendo un idle,
+    // pero ya no depende de mirar píxeles para detectarlo.
     scene.tweens.add({
       targets: headContainer,
-      x: { from: baseX - 2.5, to: baseX + 2.5 },
-      y: { from: baseY + 3, to: baseY - 4 },
-      angle: { from: -0.75, to: 0.85 },
-      scaleX: { from: 0.996, to: 1.006 },
-      scaleY: { from: 0.997, to: 1.008 },
-      duration: 1050,
+      x: { from: baseX - 5, to: baseX + 5 },
+      y: { from: baseY + 6, to: baseY - 7 },
+      angle: { from: -1.25, to: 1.35 },
+      scaleX: { from: 0.992, to: 1.012 },
+      scaleY: { from: 0.994, to: 1.016 },
+      duration: 900,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.InOut'
     });
 
-    // Pestañeo visible y frecuente.
     const blinkOnce = () => {
       eyelid.setVisible(true);
-      scene.time.delayedCall(180, () => {
+      scene.time.delayedCall(260, () => {
         eyelid.setVisible(false);
-        scene.time.delayedCall(Phaser.Math.Between(1500, 2800), blinkOnce);
+        scene.time.delayedCall(Phaser.Math.Between(1200, 2300), blinkOnce);
       });
     };
-    scene.time.delayedCall(700, blinkOnce);
+    scene.time.delayedCall(650, blinkOnce);
 
-    // Respiración: una variación leve en hombros/pecho, separada del balanceo.
-    // No mueve los pies ni el cuerpo completo.
-    const breathGlow = scene.add.ellipse(255, 655, 250, 120, 0xffffff, 0)
-      .setDepth(17);
-    scene.tweens.add({
-      targets: breathGlow,
-      scaleY: { from: 0.985, to: 1.025 },
-      duration: 1450,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.InOut'
-    });
-
-    scene.__womanIdleObjects = {
-      headContainer,
-      headImage,
-      eyelid,
-      breathGlow
-    };
-
+    scene.__womanIdleObjects = { headContainer, headImage, eyelid, shadow };
     return true;
   };
 
