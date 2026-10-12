@@ -42,10 +42,40 @@ jobs:
             });
 
             await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
+            await page.waitForTimeout(500);
 
-            // Prueba funcional: no basta con que el JS cargue; la cabeza debe
-            // cambiar realmente de posición/ángulo mientras la escena corre.
-            await page.waitForTimeout(400);
+            const diagnostic = await page.evaluate(() => {
+              const scripts = [...document.scripts].map(s => s.src || '(inline)');
+              const resources = performance.getEntriesByType('resource')
+                .map(r => r.name)
+                .filter(name => name.includes('woman-idle') || name.includes('game.js'));
+              const game = Phaser.GAMES && Phaser.GAMES[0];
+              let scene = null;
+              let sceneInfo = null;
+              if (game) {
+                try {
+                  scene = game.scene.getScene('Entrada');
+                  sceneInfo = {
+                    exists: !!scene,
+                    status: scene && scene.sys && scene.sys.settings ? scene.sys.settings.status : null,
+                    active: scene && scene.sys && typeof scene.sys.isActive === 'function' ? scene.sys.isActive() : null,
+                    entradaTexture: !!(scene && scene.textures && scene.textures.exists('entrada')),
+                    womanReady: !!(scene && scene.__womanIdleReady),
+                    womanObjects: !!(scene && scene.__womanIdleObjects)
+                  };
+                } catch (e) {
+                  sceneInfo = { error: String(e) };
+                }
+              }
+              return {
+                scripts,
+                resources,
+                games: Phaser.GAMES ? Phaser.GAMES.length : 0,
+                sceneInfo
+              };
+            });
+            console.log('WOMAN_DIAGNOSTIC=' + JSON.stringify(diagnostic));
+
             const womanStates = [];
             for (let i = 0; i < 5; i++) {
               const state = await page.evaluate(() => {
@@ -76,7 +106,6 @@ jobs:
             await page.screenshot({ path: 'woman-01.png', fullPage: true });
             await page.waitForTimeout(450);
             await page.screenshot({ path: 'woman-02.png', fullPage: true });
-
             await page.waitForTimeout(300);
             await page.screenshot({ path: 'neon-03-retro.png', fullPage: true });
             await page.waitForTimeout(550);
@@ -95,6 +124,10 @@ jobs:
             await browser.close();
           })();
           NODE
+
+      - name: Show HTTP requests
+        if: always()
+        run: cat /tmp/videoclub-http.log || true
 
       - name: Upload screenshots
         if: always()
