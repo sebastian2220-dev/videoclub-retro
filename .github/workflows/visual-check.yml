@@ -43,20 +43,45 @@ jobs:
 
             await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
 
-            // Capturas rápidas para revisar cómo "agarra corriente" cada neón.
-            await page.waitForTimeout(150);
-            await page.screenshot({ path: 'neon-01-inicio.png', fullPage: true });
+            // Prueba funcional: no basta con que el JS cargue; la cabeza debe
+            // cambiar realmente de posición/ángulo mientras la escena corre.
+            await page.waitForTimeout(400);
+            const womanStates = [];
+            for (let i = 0; i < 5; i++) {
+              const state = await page.evaluate(() => {
+                const game = Phaser.GAMES && Phaser.GAMES[0];
+                if (!game) return null;
+                const scene = game.scene.getScene('Entrada');
+                const head = scene && scene.__womanIdleObjects && scene.__womanIdleObjects.headContainer;
+                if (!head) return null;
+                return { x: head.x, y: head.y, angle: head.angle, visible: head.visible };
+              });
+              womanStates.push(state);
+              await page.waitForTimeout(250);
+            }
+            console.log('WOMAN_STATES=' + JSON.stringify(womanStates));
 
-            await page.waitForTimeout(500);
-            await page.screenshot({ path: 'neon-02-video.png', fullPage: true });
+            if (womanStates.some(state => !state || !state.visible)) {
+              errors.push('La capa animada de la mujer no se creó o no está visible.');
+            } else {
+              const xs = womanStates.map(s => s.x);
+              const ys = womanStates.map(s => s.y);
+              const angles = womanStates.map(s => s.angle);
+              const range = arr => Math.max(...arr) - Math.min(...arr);
+              if (range(xs) < 1 && range(ys) < 1 && range(angles) < 0.2) {
+                errors.push('La cabeza de la mujer existe, pero no está cambiando de posición ni ángulo.');
+              }
+            }
 
-            await page.waitForTimeout(500);
+            await page.screenshot({ path: 'woman-01.png', fullPage: true });
+            await page.waitForTimeout(450);
+            await page.screenshot({ path: 'woman-02.png', fullPage: true });
+
+            await page.waitForTimeout(300);
             await page.screenshot({ path: 'neon-03-retro.png', fullPage: true });
-
             await page.waitForTimeout(550);
             await page.screenshot({ path: 'neon-04-abierto.png', fullPage: true });
-
-            await page.waitForTimeout(2200);
+            await page.waitForTimeout(1600);
             await page.screenshot({ path: 'neon-05-estable.png', fullPage: true });
 
             await page.mouse.move(960, 890);
@@ -77,8 +102,8 @@ jobs:
         with:
           name: visual-check
           path: |
-            neon-01-inicio.png
-            neon-02-video.png
+            woman-01.png
+            woman-02.png
             neon-03-retro.png
             neon-04-abierto.png
             neon-05-estable.png
