@@ -13,7 +13,9 @@
       return false;
     }
 
-    if (!scene || !scene.sys || !scene.sys.isActive() || !scene.textures.exists('entrada')) return false;
+    // Importante: no usamos scene.sys.isActive() aquí. En esta escena ese
+    // chequeo impedía que el bloque de animación llegara a inicializarse.
+    if (!scene || !scene.textures || !scene.textures.exists('entrada')) return false;
     if (scene.__womanIdleReady) return true;
     scene.__womanIdleReady = true;
 
@@ -58,8 +60,6 @@
 
     const pivot = { x: 180, y: 590 };
 
-    // Oscurece apenas la cabeza original que queda debajo. Esto evita que al
-    // mover la capa superior se vea una segunda cara completa detrás.
     const shadow = scene.add.graphics().setDepth(17);
     shadow.fillStyle(0x12070a, 0.16);
     shadow.beginPath();
@@ -75,8 +75,6 @@
       .setPosition(headRect.x - pivot.x, headRect.y - pivot.y);
 
     const eyelid = scene.add.graphics().setVisible(false);
-
-    // Coordenada corregida: ahora cae sobre el ojo que está abierto.
     eyelid.fillStyle(0xffad73, 1);
     eyelid.fillEllipse(98, -160, 45, 44);
     eyelid.lineStyle(6, 0x32100c, 1);
@@ -96,8 +94,6 @@
     const baseX = headContainer.x;
     const baseY = headContainer.y;
 
-    // Ahora el movimiento debe verse a simple vista: sigue siendo un idle,
-    // pero ya no depende de mirar píxeles para detectarlo.
     scene.tweens.add({
       targets: headContainer,
       x: { from: baseX - 5, to: baseX + 5 },
