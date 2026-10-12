@@ -12,18 +12,18 @@ class EntradaScene extends Phaser.Scene {
   }
 
   create() {
-    // Fondo a 1920x1080 sin deformar la lógica del juego.
+    // Fondo base: seguimos usando la entrada cartoon original.
     this.add.image(GAME_WIDTH / 2, GAME_HEIGHT / 2, 'entrada')
       .setDisplaySize(GAME_WIDTH, GAME_HEIGHT);
 
-    // Botón independiente. Partimos de una escala fija y solo animamos
-    // el mismo objeto: no hay imágenes gigantes ni cambios bruscos.
+    // Iluminación viva por encima del fondo.
+    this.createNeonAtmosphere();
+
+    // Botón independiente. Se mantiene mientras terminamos la base limpia.
     const entrar = this.add.image(960, 890, 'botonEntrar')
       .setDisplaySize(620, 207)
       .setInteractive({ useHandCursor: true });
 
-    // Guardamos el tamaño base para que el hover siempre vuelva exactamente
-    // al mismo estado.
     const baseScaleX = entrar.scaleX;
     const baseScaleY = entrar.scaleY;
     const baseY = entrar.y;
@@ -66,6 +66,110 @@ class EntradaScene extends Phaser.Scene {
       });
     });
   }
+
+  createNeonAtmosphere() {
+    const ADD = Phaser.BlendModes.ADD;
+
+    // Resplandor cálido muy sutil sobre el gran cartel superior.
+    const marqueeGlow = this.add.rectangle(960, 205, 1040, 245, 0xffa73a, 0.035)
+      .setBlendMode(ADD);
+
+    const marqueeEdge = this.add.rectangle(960, 205, 1005, 215)
+      .setStrokeStyle(9, 0xffbd4a, 0.20)
+      .setBlendMode(ADD);
+
+    // Brillo azul alrededor de RETRO. No tapa el arte, solo refuerza la luz.
+    const retroGlow = this.add.rectangle(960, 292, 515, 72)
+      .setStrokeStyle(10, 0x2cdcff, 0.14)
+      .setBlendMode(ADD);
+
+    // Barras rosas laterales del letrero.
+    const pinkLeft = this.add.rectangle(652, 304, 180, 15, 0xff41d7, 0.12)
+      .setBlendMode(ADD);
+    const pinkRight = this.add.rectangle(1268, 304, 180, 15, 0xff41d7, 0.12)
+      .setBlendMode(ADD);
+
+    // Cartel ABIERTO: glow independiente para que parezca tubo real.
+    const openPink = this.add.rectangle(1086, 540, 182, 66)
+      .setStrokeStyle(9, 0xff3cae, 0.18)
+      .setAngle(-2.5)
+      .setBlendMode(ADD);
+    const openBlue = this.add.rectangle(1086, 540, 202, 82)
+      .setStrokeStyle(8, 0x25c9ff, 0.12)
+      .setAngle(-2.5)
+      .setBlendMode(ADD);
+
+    // Luces cálidas de fachada. Son halos pequeños y discretos.
+    const lampPositions = [
+      [594, 78], [967, 74], [1245, 76], [288, 104], [1590, 118],
+      [478, 111], [528, 111], [580, 111], [632, 111], [684, 111],
+      [736, 111], [788, 111], [840, 111], [892, 111], [944, 111],
+      [996, 111], [1048, 111], [1100, 111], [1152, 111], [1204, 111],
+      [1256, 111], [1308, 111], [1360, 111], [1412, 111]
+    ];
+
+    const bulbs = lampPositions.map(([x, y], index) => {
+      const radius = index < 5 ? 34 : 12;
+      return this.add.circle(x, y, radius, 0xffd36a, index < 5 ? 0.055 : 0.075)
+        .setBlendMode(ADD);
+    });
+
+    // Respiración lenta del neón principal.
+    this.tweens.add({
+      targets: [marqueeGlow, marqueeEdge, retroGlow, pinkLeft, pinkRight],
+      alpha: { from: 0.72, to: 1 },
+      duration: 1450,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.InOut'
+    });
+
+    // ABIERTO tiene una pulsación distinta para que la escena no parezca sincronizada.
+    this.tweens.add({
+      targets: [openPink, openBlue],
+      alpha: { from: 0.68, to: 1 },
+      duration: 930,
+      yoyo: true,
+      repeat: -1,
+      ease: 'Sine.InOut'
+    });
+
+    // Los focos respiran de forma ligeramente desfasada.
+    bulbs.forEach((bulb, index) => {
+      this.tweens.add({
+        targets: bulb,
+        alpha: { from: 0.45, to: 1 },
+        duration: 1100 + (index % 5) * 120,
+        delay: (index % 7) * 75,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.InOut'
+      });
+    });
+
+    // Flicker corto e irregular, como tubo de neón real. Es ocasional,
+    // no un parpadeo constante que canse la vista.
+    const flickerTargets = [pinkLeft, pinkRight, openPink, retroGlow];
+    const scheduleFlicker = () => {
+      const target = Phaser.Utils.Array.GetRandom(flickerTargets);
+      const normalAlpha = target.alpha;
+
+      this.tweens.add({
+        targets: target,
+        alpha: 0.18,
+        duration: 45,
+        yoyo: true,
+        repeat: Phaser.Math.Between(1, 2),
+        ease: 'Linear',
+        onComplete: () => {
+          target.setAlpha(normalAlpha);
+          this.time.delayedCall(Phaser.Math.Between(2200, 6200), scheduleFlicker);
+        }
+      });
+    };
+
+    this.time.delayedCall(Phaser.Math.Between(1200, 2600), scheduleFlicker);
+  }
 }
 
 class HallScene extends Phaser.Scene {
@@ -74,8 +178,7 @@ class HallScene extends Phaser.Scene {
   }
 
   create() {
-    // Esta escena es deliberadamente mínima por ahora. Primero dejamos
-    // la Entrada con calidad final; después construimos el Hall sobre esa base.
+    // El Hall sigue deliberadamente en pausa: primero terminamos la Entrada.
     this.cameras.main.setBackgroundColor('#11101a');
 
     this.add.text(960, 475, 'VIDECLUB RETRO', {
