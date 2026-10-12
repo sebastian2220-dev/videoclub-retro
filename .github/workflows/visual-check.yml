@@ -1,0 +1,61 @@
+name: Visual check
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  screenshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Playwright
+        run: |
+          npm init -y
+          npm install -D playwright
+          npx playwright install --with-deps chromium
+
+      - name: Start local server
+        run: |
+          python3 -m http.server 4173 >/tmp/videoclub-http.log 2>&1 &
+          echo $! > /tmp/videoclub-http.pid
+          sleep 2
+
+      - name: Capture 1920x1080 screenshot
+        run: |
+          node - <<'NODE'
+          const { chromium } = require('playwright');
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
+            const errors = [];
+            page.on('pageerror', error => errors.push(String(error)));
+            page.on('console', msg => {
+              if (msg.type() === 'error') errors.push(msg.text());
+            });
+            await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
+            await page.screenshot({ path: 'visual-check.png', fullPage: true });
+            if (errors.length) {
+              console.error(errors.join('\n'));
+              process.exitCode = 1;
+            }
+            await browser.close();
+          })();
+          NODE
+
+      - name: Upload screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-check
+          path: visual-check.png
+          if-no-files-found: error
+          retention-days: 7
